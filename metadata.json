@@ -1,0 +1,6 @@
+{
+  "name": "Mangobee",
+  "description": "A clean, modern, and premium e-commerce website for Mangobee's inventory of high-quality tech accessories and devices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
