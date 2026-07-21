@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ShoppingBag, 
   Menu, 
@@ -23,23 +23,15 @@ import {
   Trash2,
   Info
 } from 'lucide-react';
-
-// Product Types
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  rating: number;
-  reviewCount: number;
-  category: string;
-  badge?: string;
-  shortDesc: string;
-  longDesc: string;
-  features: string[];
-  specs: { [key: string]: string };
-  variants?: string[];
-  imageType: 'cable' | 'stand' | 'keyboard' | 'case' | 'holder' | 'earphones' | 'hub' | 'light';
-}
+import { Product, Order, Lead, SiteContent } from './types';
+import AdminDashboard from './components/AdminDashboard';
+import { 
+  getProducts, 
+  saveOrder, 
+  saveLead, 
+  getSiteContent,
+  isRealSupabase
+} from './lib/supabase';
 
 // Initial Product Data
 const PRODUCTS: Product[] = [
@@ -181,10 +173,15 @@ export default function App() {
   // Navigation / Drawer state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   
   // Filtering
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Live database inventories and copies
+  const [productsList, setProductsList] = useState<Product[]>(PRODUCTS);
+  const [liveContent, setLiveContent] = useState<SiteContent[]>([]);
 
   // Cart State
   const [cart, setCart] = useState<{ product: Product; quantity: number; variant: string }[]>([]);
@@ -208,15 +205,41 @@ export default function App() {
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '', topic: 'General Support' });
   const [contactSubmitted, setContactSubmitted] = useState(false);
 
+  // Synchronize collections
+  const loadDatabaseStore = async () => {
+    try {
+      const [dbProds, dbContent] = await Promise.all([
+        getProducts(),
+        getSiteContent()
+      ]);
+      if (dbProds && dbProds.length > 0) {
+        setProductsList(dbProds.filter(p => p.is_active));
+      }
+      if (dbContent && dbContent.length > 0) {
+        setLiveContent(dbContent);
+      }
+    } catch (err) {
+      console.warn('Sync issues loading database states. Falling back to memory catalog.');
+    }
+  };
+
+  useEffect(() => {
+    loadDatabaseStore();
+  }, []);
+
+  const getContent = (key: string, defaultValue: string) => {
+    return liveContent.find(c => c.key === key)?.value || defaultValue;
+  };
+
   // Filtered Products
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter(p => {
+    return productsList.filter(p => {
       const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
       const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           p.shortDesc.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchSearch;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [productsList, selectedCategory, searchQuery]);
 
   // Cart summary calculations
   const cartTotals = useMemo(() => {
@@ -260,13 +283,58 @@ export default function App() {
     setCart(prev => prev.filter(item => !(item.product.id === id && item.variant === variant)));
   };
 
-  // Submit checkout
-  const handleCheckoutSubmit = (e: React.FormEvent) => {
+  // Submit checkout to Supabase / LocalStorage
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shippingInfo.name || !shippingInfo.email || !shippingInfo.address) return;
-    const id = 'MB-' + Math.floor(100000 + Math.random() * 900000);
-    setPreorderId(id);
+    
+    const preId = 'MB-PRE-' + Math.floor(10000 + Math.random() * 90000);
+    setPreorderId(preId);
+
+    const orderPayload = {
+      customer_name: shippingInfo.name,
+      email: shippingInfo.email,
+      phone: shippingInfo.phone,
+      shipping_address: shippingInfo.address,
+      items: cart.map(item => ({
+        product_id: item.product.id,
+        product_name: item.product.name,
+        price: item.product.price,
+        qty: item.quantity,
+        variant: item.variant,
+        imageType: item.product.imageType,
+      })),
+      subtotal: Number(cartTotals.subtotal),
+      status: 'pending' as const,
+      pre_order_id: preId,
+    };
+
+    try {
+      await saveOrder(orderPayload);
+    } catch (err) {
+      console.warn('Fallback to local checkout log:', err);
+    }
+    
     setCheckoutStep('success');
+  };
+
+  // Submit contact to Supabase / LocalStorage
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactForm.name || !contactForm.email || !contactForm.message) return;
+
+    try {
+      await saveLead({
+        name: contactForm.name,
+        email: contactForm.email,
+        topic: contactForm.topic,
+        message: contactForm.message,
+      });
+    } catch (err) {
+      console.warn('Fallback to local lead queue:', err);
+    }
+
+    setContactSubmitted(true);
   };
 
   const resetCheckout = () => {
@@ -441,14 +509,16 @@ export default function App() {
   const addConfiguratorToCart = () => {
     // Add the selected components in one flow
     const bundleItems = [
-      { product: PRODUCTS.find(p => p.id === 'kb-combo')!, variant: cfgKeyboardColor },
-      ...(cfgStand ? [{ product: PRODUCTS.find(p => p.id === 'laptop-stand')!, variant: 'Anodized Silver' }] : []),
-      ...(cfgCase ? [{ product: PRODUCTS.find(p => p.id === 'phone-case')!, variant: 'iPhone 17 Pro Max' }] : []),
-      { product: PRODUCTS.find(p => p.id === 'usbc-cable')!, variant: cfgCableColor }
+      { product: productsList.find(p => p.id === 'kb-combo')!, variant: cfgKeyboardColor },
+      ...(cfgStand ? [{ product: productsList.find(p => p.id === 'laptop-stand')!, variant: 'Anodized Silver' }] : []),
+      ...(cfgCase ? [{ product: productsList.find(p => p.id === 'phone-case')!, variant: 'iPhone 17 Pro Max' }] : []),
+      { product: productsList.find(p => p.id === 'usbc-cable')!, variant: cfgCableColor }
     ];
 
     bundleItems.forEach(item => {
-      addToCart(item.product, item.variant);
+      if (item.product) {
+        addToCart(item.product, item.variant);
+      }
     });
     
     setCartOpen(true);
@@ -465,7 +535,7 @@ export default function App() {
           <a href="#" className="flex items-center space-x-2 select-none" id="nav-logo">
             {/* Custom Interactive Inline SVG for Logo */}
             <div className="flex items-center">
-              <span className="font-extrabold text-2xl tracking-tight text-zinc-950">mang</span>
+              <span className="font-extrabold text-2xl tracking-tight text-zinc-950">mango</span>
               {/* Specialized Orange Bee Winged Mascot inline */}
               <div className="mx-1 mt-1 relative w-8 h-8 flex items-center justify-center">
                 <svg viewBox="0 0 40 40" className="w-7 h-7 transform hover:scale-115 hover:rotate-6 transition-all duration-300">
@@ -491,11 +561,19 @@ export default function App() {
           </a>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex space-x-8 text-sm font-medium" id="desktop-links">
+          <nav className="hidden md:flex space-x-8 text-sm font-medium items-center" id="desktop-links">
             <a href="#products-showcase" className="text-zinc-600 hover:text-orange-500 transition-colors">Products</a>
             <a href="#workspace-studio" className="text-zinc-600 hover:text-orange-500 transition-colors">Workspace Configurator</a>
             <a href="#about-section" className="text-zinc-600 hover:text-orange-500 transition-colors">About Us</a>
             <a href="#contact-section" className="text-zinc-600 hover:text-orange-500 transition-colors">Contact</a>
+            
+            <button
+              onClick={() => setAdminOpen(true)}
+              className="bg-zinc-950 hover:bg-orange-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 shadow-md shadow-orange-500/10 transition-colors cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5 text-orange-500" />
+              <span>Manager Central</span>
+            </button>
           </nav>
 
           {/* Action Buttons */}
@@ -590,10 +668,18 @@ export default function App() {
             <a 
               href="#contact-section" 
               onClick={() => setMobileMenuOpen(false)}
-              className="text-lg font-medium text-zinc-800 hover:text-orange-500 transition-colors py-2"
+              className="text-lg font-medium text-zinc-800 hover:text-orange-500 transition-colors py-2 border-b border-zinc-100"
             >
               Contact
             </a>
+
+            <button 
+              onClick={() => { setMobileMenuOpen(false); setAdminOpen(true); }}
+              className="text-lg font-bold text-orange-500 hover:text-orange-600 transition-colors py-2 flex items-center space-x-2 text-left"
+            >
+              <Sliders className="w-5 h-5" />
+              <span>Manager Central</span>
+            </button>
 
             <button 
               onClick={() => { setMobileMenuOpen(false); setCartOpen(true); }}
@@ -619,12 +705,11 @@ export default function App() {
               </div>
               
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-zinc-950 tracking-tight leading-tight" id="hero-heading">
-                Elevate Your <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-black">Digital Workspace.</span>
+                {getContent('hero_headline', 'Elevate Your Digital Workspace.')}
               </h1>
               
               <p className="text-zinc-600 text-base sm:text-lg max-w-2xl leading-relaxed" id="hero-subtext">
-                Explore <span className="font-semibold text-zinc-900">Mangobee&apos;s</span> signature selection of high-performance keyboards, custom aluminum stands, fast-charging braided cables, and ergonomic tech gear designed to seamlessly transform how you work and play.
+                {getContent('hero_subheadline', "Explore Mangobee's signature selection of high-performance keyboards, custom aluminum stands, fast-charging braided cables, and ergonomic tech gear designed to seamlessly transform how you work and play.")}
               </p>
 
               {/* USP Highlights Mini Section */}
@@ -711,10 +796,10 @@ export default function App() {
                 {/* Add bundle to cart action button */}
                 <button 
                   onClick={() => {
-                    const stand = PRODUCTS.find(p => p.id === 'laptop-stand')!;
-                    const kb = PRODUCTS.find(p => p.id === 'kb-combo')!;
-                    addToCart(stand);
-                    addToCart(kb);
+                    const stand = productsList.find(p => p.id === 'laptop-stand')!;
+                    const kb = productsList.find(p => p.id === 'kb-combo')!;
+                    if (stand) addToCart(stand);
+                    if (kb) addToCart(kb);
                   }}
                   className="w-full mt-4 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition-colors duration-200 text-sm shadow-md"
                 >
@@ -1078,10 +1163,10 @@ export default function App() {
             <div className="lg:col-span-7 space-y-6">
               <span className="text-xs font-bold text-orange-500 tracking-wider uppercase">Our Design Philosophy</span>
               <h2 className="text-3xl sm:text-4xl font-black text-zinc-950 tracking-tight leading-tight">
-                Crafting the tools of the modern digital artisan.
+                {getContent('about_headline', 'Crafting the tools of the modern digital artisan.')}
               </h2>
               <p className="text-zinc-600 leading-relaxed">
-                At <span className="font-semibold text-zinc-900">Mangobee</span>, we believe that your workspace accessories shouldn&apos;t just work — they should inspire. What began as a search for high-speed charging cables turned into a dedicated obsession with structural ergonomics, sleek materials, and long-lasting durability.
+                {getContent('about_text', "At Mangobee, we believe that your workspace accessories shouldn't just work — they should inspire. What began as a search for high-speed charging cables turned into a dedicated obsession with structural ergonomics, sleek materials, and long-lasting durability.")}
               </p>
               <p className="text-zinc-600 leading-relaxed">
                 Every single keyboard, mouse, stand, and multi-port hub we build undergoes rigorous load and bend tests, ensuring they survive the daily commute, intensive coding sessions, or rugged outdoor travel.
@@ -1188,7 +1273,7 @@ export default function App() {
                 </div>
               ) : (
                 <form 
-                  onSubmit={(e) => { e.preventDefault(); setContactSubmitted(true); }}
+                  onSubmit={handleContactSubmit}
                   className="space-y-4"
                   id="contact-form"
                 >
@@ -1625,7 +1710,7 @@ export default function App() {
             {/* Logo and brief */}
             <div className="md:col-span-4 space-y-4">
               <div className="flex items-center">
-                <span className="font-extrabold text-xl tracking-tight text-white">mang</span>
+                <span className="font-extrabold text-xl tracking-tight text-white">mango</span>
                 <span className="font-extrabold text-xl tracking-tight text-orange-500">bee</span>
               </div>
               <p className="text-zinc-400 text-xs leading-relaxed max-w-xs">
@@ -1683,6 +1768,14 @@ export default function App() {
 
         </div>
       </footer>
+
+      {/* Admin Central Dashboard Modal */}
+      {adminOpen && (
+        <AdminDashboard 
+          onClose={() => setAdminOpen(false)} 
+          onContentChange={loadDatabaseStore} 
+        />
+      )}
 
     </div>
   );
