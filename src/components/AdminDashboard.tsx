@@ -68,6 +68,14 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
   const [siteContent, setSiteContent] = useState<SiteContent[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Localization settings
+  const [activeCurrency, setActiveCurrency] = useState<'USD' | 'INR'>(
+    (localStorage.getItem('mangobee_currency') as 'USD' | 'INR') || 'INR'
+  );
+  const [exchangeRate, setExchangeRate] = useState<number>(
+    Number(localStorage.getItem('mangobee_exchange_rate')) || 83.0
+  );
+
   // Toast Notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -108,6 +116,11 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
   const loadDashboardData = async () => {
     setLoading(true);
     try {
+      const savedCurr = (localStorage.getItem('mangobee_currency') as 'USD' | 'INR') || 'INR';
+      const savedRate = Number(localStorage.getItem('mangobee_exchange_rate')) || 83.0;
+      setActiveCurrency(savedCurr);
+      setExchangeRate(savedRate);
+
       const [prods, ords, lds, cnt] = await Promise.all([
         getProducts(),
         getOrders(),
@@ -246,7 +259,11 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
       setProdId(product.id);
       setProdName(product.name);
       setProdCategory(product.category);
-      setProdPrice(product.price);
+      // Load price in active currency
+      const displayPrice = activeCurrency === 'INR' 
+        ? Math.round(product.price * exchangeRate) 
+        : product.price;
+      setProdPrice(displayPrice);
       setProdStock(product.stock_quantity);
       setProdDesc(product.description);
       setProdVariants(product.variants?.join(', ') || '');
@@ -260,7 +277,10 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
       setProdId('prod-' + Math.random().toString(36).substr(2, 5));
       setProdName('');
       setProdCategory('Electronics');
-      setProdPrice(19.99);
+      const defaultPrice = activeCurrency === 'INR'
+        ? Math.round(19.99 * exchangeRate)
+        : 19.99;
+      setProdPrice(defaultPrice);
       setProdStock(50);
       setProdDesc('');
       setProdVariants('Default Finish');
@@ -287,7 +307,7 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
       id: prodId,
       name: prodName,
       category: prodCategory,
-      price: Number(prodPrice),
+      price: activeCurrency === 'INR' ? Number((prodPrice / exchangeRate).toFixed(2)) : Number(prodPrice),
       stock_quantity: Number(prodStock),
       description: prodDesc,
       specs: specsObj,
@@ -351,6 +371,22 @@ export default function AdminDashboard({ onClose, onContentChange }: AdminDashbo
       newLeads,
     };
   }, [products, orders, leads]);
+
+  // Currency Formatter
+  const formatPrice = (val: number) => {
+    if (activeCurrency === 'INR') {
+      const inrValue = Math.round(val * exchangeRate);
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(inrValue);
+    }
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(val);
+  };
 
   // SQL Schema text for settings tab
   const sqlSchema = `-- Run this in your Supabase SQL Editor to bootstrap tables:
@@ -634,7 +670,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                       {/* Stats grid */}
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                          { label: 'Total Revenue', value: `$${stats.totalSales.toFixed(2)}`, desc: 'Excludes cancelled orders', color: 'text-green-600 bg-green-50 border-green-100' },
+                          { label: 'Total Revenue', value: formatPrice(stats.totalSales), desc: 'Excludes cancelled orders', color: 'text-green-600 bg-green-50 border-green-100' },
                           { label: 'Sales Orders', value: orders.length, desc: `${stats.pendingOrders} awaiting fulfillment`, color: 'text-blue-600 bg-blue-50 border-blue-100' },
                           { label: 'Bulk Lead Inquiries', value: leads.length, desc: `${stats.newLeads} unresolved tickets`, color: 'text-amber-600 bg-amber-50 border-amber-100' },
                           { label: 'Active Inventory', value: stats.activeProducts, desc: 'Active items in stock', color: 'text-purple-600 bg-purple-50 border-purple-100' },
@@ -667,7 +703,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                                   <div key={o.id} className="flex-1 flex flex-col items-center group relative cursor-pointer">
                                     {/* Tooltip */}
                                     <div className="absolute -top-12 bg-zinc-950 text-white text-[10px] px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity font-bold whitespace-nowrap">
-                                      {o.customer_name}: ${o.subtotal.toFixed(2)}
+                                      {o.customer_name}: {formatPrice(o.subtotal)}
                                     </div>
                                     <div 
                                       className={`w-full rounded-t-lg transition-all duration-500 ${
@@ -791,7 +827,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                                       </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                      <span className="font-black text-zinc-950">${p.price.toFixed(2)}</span>
+                                      <span className="font-black text-zinc-950">{formatPrice(p.price)}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -910,7 +946,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                                       </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                      <span className="font-black text-zinc-950">${o.subtotal.toFixed(2)}</span>
+                                      <span className="font-black text-zinc-950">{formatPrice(o.subtotal)}</span>
                                     </td>
                                     <td className="px-6 py-4">
                                       <span className="font-mono text-[10px] text-zinc-400">{o.pre_order_id}</span>
@@ -1270,6 +1306,49 @@ CREATE TABLE IF NOT EXISTS site_content (
                         </div>
 
                       </div>
+
+                      {/* Store Localization & Currency Settings */}
+                      <div className="bg-white p-6 rounded-3xl border border-zinc-200 space-y-4">
+                        <span className="text-xs font-bold text-zinc-400 tracking-wider uppercase">Store Localization & Currency</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Active Currency Display</label>
+                            <select
+                              value={activeCurrency}
+                              onChange={(e) => setActiveCurrency(e.target.value as 'USD' | 'INR')}
+                              className="w-full bg-zinc-50 border border-zinc-200 px-3 py-2 rounded-lg text-xs font-bold outline-none focus:bg-white focus:border-orange-500"
+                            >
+                              <option value="INR">Indian Rupee (INR - ₹)</option>
+                              <option value="USD">US Dollars (USD - $)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Exchange Rate (1 USD to INR)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={exchangeRate}
+                              onChange={(e) => setExchangeRate(Number(e.target.value))}
+                              placeholder="83.00"
+                              className="w-full bg-zinc-50 border border-zinc-200 px-3 py-2 rounded-lg text-xs font-bold outline-none focus:bg-white focus:border-orange-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                          <button
+                            onClick={() => {
+                              localStorage.setItem('mangobee_currency', activeCurrency);
+                              localStorage.setItem('mangobee_exchange_rate', String(exchangeRate));
+                              showToast('Store localization updated! Saving...', 'success');
+                              if (onContentChange) onContentChange();
+                            }}
+                            className="bg-orange-500 hover:bg-orange-600 text-white font-extrabold px-6 py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+                          >
+                            Save Localization Settings
+                          </button>
+                        </div>
+                      </div>
+
                     </div>
                   )}
 
@@ -1341,7 +1420,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] uppercase font-bold text-zinc-400 mb-1">Retail Price ($)</label>
+                      <label className="block text-[10px] uppercase font-bold text-zinc-400 mb-1">Retail Price ({activeCurrency === 'INR' ? '₹' : '$'})</label>
                       <input
                         type="number"
                         step="0.01"
@@ -1530,7 +1609,7 @@ CREATE TABLE IF NOT EXISTS site_content (
                           <div className="text-[10px] text-zinc-400 font-bold uppercase">{item.variant}</div>
                         </div>
                         <div className="text-right">
-                          <div className="font-extrabold text-zinc-900">${(item.price * item.qty).toFixed(2)}</div>
+                          <div className="font-extrabold text-zinc-900">{formatPrice(item.price * item.qty)}</div>
                           <div className="text-[10px] text-zinc-400">Qty: {item.qty}</div>
                         </div>
                       </div>
@@ -1539,7 +1618,7 @@ CREATE TABLE IF NOT EXISTS site_content (
 
                   <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
                     <span className="text-zinc-400 font-bold">Total Sales Subtotal</span>
-                    <span className="text-lg font-black text-zinc-950">${selectedOrder.subtotal.toFixed(2)}</span>
+                    <span className="text-lg font-black text-zinc-950">{formatPrice(selectedOrder.subtotal)}</span>
                   </div>
                 </div>
 

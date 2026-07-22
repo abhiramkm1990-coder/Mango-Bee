@@ -21,7 +21,9 @@ import {
   Plus,
   Minus,
   Trash2,
-  Info
+  Info,
+  CreditCard,
+  Lock
 } from 'lucide-react';
 import { Product, Order, Lead, SiteContent } from './types';
 import AdminDashboard from './components/AdminDashboard';
@@ -48,7 +50,8 @@ const PRODUCTS: Product[] = [
     features: ['Multi-Device Pairing (2.4Ghz + Dual Bluetooth)', 'Rechargeable 500mAh Lithium Battery', 'Whisper-Quiet Mechanical Scissor-Switches', 'Ergonomic Natural Wrist Slope'],
     specs: { 'Battery Life': 'Up to 3 months on single charge', 'Switch Type': 'Quiet Tactile Scissor', 'Compatibility': 'Windows, macOS, iOS, Android', 'Weight': '420g' },
     variants: ['Minimalist White', 'Carbon Slate'],
-    imageType: 'keyboard'
+    imageType: 'keyboard',
+    stock_quantity: 14
   },
   {
     id: 'laptop-stand',
@@ -63,7 +66,8 @@ const PRODUCTS: Product[] = [
     features: ['6 Adjustable Angle Levels (15° to 45°)', 'Aircraft-Grade Sandblasted Aluminum', 'Fully Collapsible with Carrying Sleeve', 'Thick Protective Silicone Padding'],
     specs: { 'Material': '6063 Aluminum Alloy', 'Support Weight': 'Up to 20kg', 'Size Folded': '260 x 45 x 15 mm', 'Heat Dissipation': 'Passive Open-Air design' },
     variants: ['Anodized Silver', 'Space Gray'],
-    imageType: 'stand'
+    imageType: 'stand',
+    stock_quantity: 8
   },
   {
     id: 'usbc-cable',
@@ -78,7 +82,8 @@ const PRODUCTS: Product[] = [
     features: ['Supports 65W Power Delivery (PD)', 'Double-Braided Ballistic Nylon Armor', 'Strain-Relief Flexible Joints', 'Smart IC E-Marker Safety Chip Inside'],
     specs: { 'Length': '1.8 Meters (6 Feet)', 'Data Speed': '480 Mbps', 'Max Output': '20V / 3.25A', 'Bend Lifespan': '25,000+ Bends' },
     variants: ['Mango Orange & Black Accent', 'Solid Black Slate'],
-    imageType: 'cable'
+    imageType: 'cable',
+    stock_quantity: 45
   },
   {
     id: 'phone-case',
@@ -93,7 +98,8 @@ const PRODUCTS: Product[] = [
     features: ['MagSafe Compatible Ring Built-in', '10ft Mil-Grade Drop Protection', 'Anti-Yellowing Matte Finish Shield', 'Ultra-Responsive Tactile Buttons'],
     specs: { 'Thickness': '1.2 mm', 'Materials': 'Flexible TPU + Solid Polycarbonate', 'Magnets': '38x N52 Neodymium', 'Models': 'iPhone 17, 16, 15 | Samsung S24, S23' },
     variants: ['iPhone 17 Pro Max', 'iPhone 16 Pro', 'Samsung Galaxy S24 Ultra'],
-    imageType: 'case'
+    imageType: 'case',
+    stock_quantity: 32
   },
   {
     id: 'usb-hub',
@@ -108,7 +114,8 @@ const PRODUCTS: Product[] = [
     features: ['4-7 Dedicated USB 3.0 Ports', '5Gbps Blazing Fast Data Sync', 'Anodized Premium Alloy Structure', 'Individual Blue LED Port Indicators'],
     specs: { 'Body Material': 'Anodized Aluminum', 'Cable Length': '30cm', 'Power Source': 'Bus-Powered or 5V DC Auxiliary', 'Chipset': 'Premium GL3520 Controller' },
     variants: ['4-Port Compact', '7-Port Pro Expanded'],
-    imageType: 'hub'
+    imageType: 'hub',
+    stock_quantity: 5
   },
   {
     id: 'wired-earphones',
@@ -123,7 +130,8 @@ const PRODUCTS: Product[] = [
     features: ['10mm High-Resolution Dynamic Drivers', '3-Button Inline Remote & HD Mic', 'Ergonomic In-Ear Fit for Exercise', 'Passive Acoustic Noise Isolation'],
     specs: { 'Frequency Response': '20 Hz - 20 kHz', 'Impedance': '32 Ohm', 'Connector': 'Type-C / 3.5mm Gold-Plated', 'Cord Length': '1.2 Meters' },
     variants: ['Type-C Connector', '3.5mm Audio Jack'],
-    imageType: 'earphones'
+    imageType: 'earphones',
+    stock_quantity: 19
   },
   {
     id: 'ring-light',
@@ -138,7 +146,8 @@ const PRODUCTS: Product[] = [
     features: ['3 Glow Modes (Warm, Natural, Cool White)', '10 Distinct Brightness Levels', 'Stable Non-Wobble Metal Tripod', 'USB-Powered for Desk Portability'],
     specs: { 'Outer Diameter': '8 Inches', 'Color Temp': '3000K - 6500K', 'USB Cord Length': '2 Meters', 'Power Output': '12 Watts' },
     variants: ['Desktop Tripod Edition', 'Premium Tall Stand Edition'],
-    imageType: 'light'
+    imageType: 'light',
+    stock_quantity: 3
   },
   {
     id: 'car-mount',
@@ -153,7 +162,8 @@ const PRODUCTS: Product[] = [
     features: ['Secure Dual-Claw Vent Grip', '360° Ball-Joint Rotation System', 'Safe Neodymium Shielded Magnetic Field', 'One-Hand Quick Snap-On Action'],
     specs: { 'Magnet Pull Force': 'Up to 2.5kg load', 'Material': 'Carbon-reinforced Polycarbonate', 'Compatibility': 'All iPhone/Galaxy Models', 'Weight': '65g' },
     variants: ['Stealth Charcoal Black', 'Sunset Orange Trim'],
-    imageType: 'holder'
+    imageType: 'holder',
+    stock_quantity: 22
   }
 ];
 
@@ -179,6 +189,21 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Active Store Currency & Exchange Multiplier States
+  const [activeCurrency, setActiveCurrency] = useState<'USD' | 'INR'>(() => {
+    return (localStorage.getItem('mangobee_currency') as 'USD' | 'INR') || 'INR';
+  });
+  const [exchangeRate, setExchangeRate] = useState<number>(() => {
+    return Number(localStorage.getItem('mangobee_exchange_rate')) || 83;
+  });
+
+  const formatPrice = (usdAmount: number) => {
+    if (activeCurrency === 'INR') {
+      return `₹${Math.round(usdAmount * exchangeRate).toLocaleString('en-IN')}`;
+    }
+    return `$${usdAmount.toFixed(2)}`;
+  };
+
   // Live database inventories and copies
   const [productsList, setProductsList] = useState<Product[]>(PRODUCTS);
   const [liveContent, setLiveContent] = useState<SiteContent[]>([]);
@@ -201,6 +226,18 @@ export default function App() {
   const [shippingInfo, setShippingInfo] = useState({ name: '', email: '', address: '', phone: '' });
   const [preorderId, setPreorderId] = useState('');
   
+  // Simulated Razorpay states
+  const [razorpayOpen, setRazorpayOpen] = useState(false);
+  const [razorpayOrderPayload, setRazorpayOrderPayload] = useState<any>(null);
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
+  const [razorpayMethod, setRazorpayMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [razorpayUpiId, setRazorpayUpiId] = useState('8431764889@paytm');
+  const [razorpayCardNumber, setRazorpayCardNumber] = useState('4111 2222 3333 4444');
+  const [razorpayCardExpiry, setRazorpayCardExpiry] = useState('12/29');
+  const [razorpayCardCvv, setRazorpayCardCvv] = useState('123');
+  const [otpStep, setOtpStep] = useState(false);
+  const [userOtpInput, setUserOtpInput] = useState('');
+  
   // Contact Form State
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '', topic: 'General Support' });
   const [contactSubmitted, setContactSubmitted] = useState(false);
@@ -208,6 +245,27 @@ export default function App() {
   // Synchronize collections
   const loadDatabaseStore = async () => {
     try {
+      const savedCurr = (localStorage.getItem('mangobee_currency') as 'USD' | 'INR') || 'INR';
+      setActiveCurrency(savedCurr);
+
+      let currentRate = 83; // fallback
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && apiData.rates && apiData.rates.INR) {
+            currentRate = Number(apiData.rates.INR);
+            localStorage.setItem('mangobee_exchange_rate', String(currentRate));
+          }
+        } else {
+          currentRate = Number(localStorage.getItem('mangobee_exchange_rate')) || 83;
+        }
+      } catch (fetchErr) {
+        console.warn('Unable to fetch exchange rate online, reading local storage...', fetchErr);
+        currentRate = Number(localStorage.getItem('mangobee_exchange_rate')) || 83;
+      }
+      setExchangeRate(currentRate);
+
       const [dbProds, dbContent] = await Promise.all([
         getProducts(),
         getSiteContent()
@@ -243,13 +301,36 @@ export default function App() {
 
   // Cart summary calculations
   const cartTotals = useMemo(() => {
-    const subtotal = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+    const kbCount = cart.find(item => item.product.id === 'kb-combo')?.quantity || 0;
+    const cableCount = cart.find(item => item.product.id === 'usbc-cable')?.quantity || 0;
+    const standCount = cart.find(item => item.product.id === 'laptop-stand')?.quantity || 0;
+
+    // 1. Keyboard & Mouse + Cable Armor Bundle Discount
+    const cableProduct = productsList.find(p => p.id === 'usbc-cable');
+    const cablePrice = cableProduct ? cableProduct.price : 15.99;
+    const kbCableBundleCount = Math.min(kbCount, cableCount);
+    const kbCableDiscount = kbCableBundleCount * Math.max(0, cablePrice - 9.99);
+
+    // 2. Keyboard & Mouse + Aluminum Stand Combo Discount
+    const kbProduct = productsList.find(p => p.id === 'kb-combo');
+    const standProduct = productsList.find(p => p.id === 'laptop-stand');
+    const kbPrice = kbProduct ? kbProduct.price : 59.99;
+    const standPrice = standProduct ? standProduct.price : 39.99;
+    const originalComboSum = kbPrice + standPrice;
+    const kbStandDiscountPerBundle = Math.max(0, originalComboSum - 84.99);
+    const kbStandBundleCount = Math.min(kbCount, standCount);
+    const kbStandDiscount = kbStandBundleCount * kbStandDiscountPerBundle;
+
+    const bundleDiscount = kbCableDiscount + kbStandDiscount;
+
+    const rawSubtotal = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+    const subtotal = Math.max(0, rawSubtotal - bundleDiscount);
     const shipping = subtotal > 49.99 || subtotal === 0 ? 0 : 4.99;
     const tax = subtotal * 0.08;
     const total = subtotal + shipping + tax;
     const totalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
-    return { subtotal, shipping, tax, total, totalCount };
-  }, [cart]);
+    return { subtotal, shipping, tax, total, totalCount, bundleDiscount };
+  }, [cart, productsList]);
 
   // Cart operations
   const addToCart = (product: Product, variant?: string) => {
@@ -309,13 +390,20 @@ export default function App() {
       pre_order_id: preId,
     };
 
-    try {
-      await saveOrder(orderPayload);
-    } catch (err) {
-      console.warn('Fallback to local checkout log:', err);
+    if (activeCurrency === 'INR') {
+      // Prompt high fidelity Razorpay gateway overlay
+      setRazorpayOrderPayload(orderPayload);
+      setRazorpayOpen(true);
+      setOtpStep(false);
+      setUserOtpInput('');
+    } else {
+      try {
+        await saveOrder(orderPayload);
+      } catch (err) {
+        console.warn('Fallback to local checkout log:', err);
+      }
+      setCheckoutStep('success');
     }
-    
-    setCheckoutStep('success');
   };
 
   // Submit contact to Supabase / LocalStorage
@@ -496,15 +584,31 @@ export default function App() {
     }
   };
 
+  // Dynamic prices from productsList
+  const standPrice = useMemo(() => {
+    return productsList.find(p => p.id === 'laptop-stand')?.price || 39.99;
+  }, [productsList]);
+
+  const casePrice = useMemo(() => {
+    return productsList.find(p => p.id === 'phone-case')?.price || 18.99;
+  }, [productsList]);
+
   // Configurator total price
   const configuratorTotal = useMemo(() => {
-    let price = 59.99; // Base Keyboard Combo price
-    if (cfgStand) price += 39.99;
-    if (cfgCase) price += 18.99;
-    // Cable comes included as premium bonus in custom kit
-    price += 9.99; 
+    const kb = productsList.find(p => p.id === 'kb-combo');
+    const cable = productsList.find(p => p.id === 'usbc-cable');
+
+    const kbPrice = kb ? kb.price : 59.99;
+    const cablePrice = cable ? cable.price : 15.99;
+
+    let price = kbPrice;
+    if (cfgStand) price += standPrice;
+    if (cfgCase) price += casePrice;
+    
+    // Cable comes included with promo bundle discount
+    price += Math.max(0, cablePrice - 6.00); 
     return price;
-  }, [cfgStand, cfgCase]);
+  }, [productsList, cfgStand, cfgCase, standPrice, casePrice]);
 
   const addConfiguratorToCart = () => {
     // Add the selected components in one flow
@@ -787,10 +891,20 @@ export default function App() {
                     <span className="text-[10px] text-orange-400 tracking-wider uppercase font-bold block">Exclusive Combo Offer</span>
                     <h3 className="text-sm font-bold mt-0.5">Aluminum Stand + Keyboard Bundle</h3>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs line-through text-zinc-400 block">$99.98</span>
-                    <span className="text-base font-extrabold text-orange-400">$84.99</span>
-                  </div>
+                  {(() => {
+                    const stand = productsList.find(p => p.id === 'laptop-stand');
+                    const kb = productsList.find(p => p.id === 'kb-combo');
+                    const standPriceVal = stand ? stand.price : 39.99;
+                    const kbPriceVal = kb ? kb.price : 59.99;
+                    const originalComboSum = standPriceVal + kbPriceVal;
+                    const discountedComboPrice = Math.max(0, originalComboSum - 14.99);
+                    return (
+                      <div className="text-right">
+                        <span className="text-xs line-through text-zinc-400 block">{formatPrice(originalComboSum)}</span>
+                        <span className="text-base font-extrabold text-orange-400">{formatPrice(discountedComboPrice)}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Add bundle to cart action button */}
@@ -921,22 +1035,44 @@ export default function App() {
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-xs text-zinc-400 block font-medium">Price</span>
-                          <span className="text-xl font-black text-zinc-950">${product.price}</span>
+                          <span className="text-xl font-black text-zinc-950">{formatPrice(product.price)}</span>
+                          
+                          {/* Real-time remaining stock indicator */}
+                          {product.stock_quantity !== undefined && (
+                            <span className={`block text-[10px] font-bold mt-1 ${
+                              product.stock_quantity === 0
+                                ? 'text-red-500 font-extrabold'
+                                : product.stock_quantity < 10
+                                  ? 'text-amber-500'
+                                  : 'text-green-600'
+                            }`}>
+                              {product.stock_quantity === 0
+                                ? 'Out of Stock'
+                                : product.stock_quantity < 10
+                                  ? `🔥 Only ${product.stock_quantity} left!`
+                                  : '✓ In Stock'}
+                            </span>
+                          )}
                         </div>
                         <div className="flex space-x-1.5">
                           <button 
                             onClick={() => { setSelectedProduct(product); setModalVariant(product.variants?.[0] || ''); }}
-                            className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl transition-colors"
+                            className="p-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-xl transition-colors cursor-pointer"
                             title="Quick View Details"
                           >
                             <Info className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => addToCart(product)}
-                            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center space-x-1 shadow-md shadow-orange-500/10 transition-colors"
+                            disabled={product.stock_quantity === 0}
+                            className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center space-x-1 shadow-md transition-all cursor-pointer ${
+                              product.stock_quantity === 0
+                                ? 'bg-zinc-100 text-zinc-400 border border-zinc-200 shadow-none cursor-not-allowed'
+                                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/10'
+                            }`}
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span>Add</span>
+                            <span>{product.stock_quantity === 0 ? 'Sold Out' : 'Add'}</span>
                           </button>
                         </div>
                       </div>
@@ -987,15 +1123,25 @@ export default function App() {
                       {renderProductSVG('keyboard', cfgKeyboardColor === 'Minimalist White')}
                     </div>
 
-                    <div className="flex justify-center space-x-6 items-center pt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 border-t border-zinc-100/80 text-center">
                       <div className="flex flex-col items-center">
-                        <span className="text-[10px] text-zinc-400 uppercase font-bold">Cable Armor</span>
-                        <span className="text-xs font-bold text-orange-600">{cfgCableColor.split(' ')[0]}</span>
+                        <span className="text-[9px] text-zinc-400 uppercase font-black tracking-wider">Keyboard & Mouse</span>
+                        <span className="text-[11px] font-bold text-zinc-800 truncate max-w-[120px]">{cfgKeyboardColor.split(' ')[0]}</span>
+                      </div>
+                      {cfgStand && (
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] text-zinc-400 uppercase font-black tracking-wider">Laptop Stand</span>
+                          <span className="text-[11px] font-bold text-zinc-800">Anodized Silver</span>
+                        </div>
+                      )}
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] text-zinc-400 uppercase font-black tracking-wider">Cable Armor</span>
+                        <span className="text-[11px] font-bold text-orange-600 truncate max-w-[120px]">{cfgCableColor.split(' ')[0]}</span>
                       </div>
                       {cfgCase && (
                         <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-zinc-400 uppercase font-bold">Phone Case</span>
-                          <span className="text-xs font-bold text-zinc-800">MagSafe Armor</span>
+                          <span className="text-[9px] text-zinc-400 uppercase font-black tracking-wider">Phone Case</span>
+                          <span className="text-[11px] font-bold text-zinc-800">MagSafe Armor</span>
                         </div>
                       )}
                     </div>
@@ -1004,7 +1150,7 @@ export default function App() {
                   <div className="border-t border-zinc-100 pt-4 flex justify-between items-center">
                     <div>
                       <span className="text-xs text-zinc-400 block">Bundle Price</span>
-                      <span className="text-2xl font-black text-zinc-950">${configuratorTotal.toFixed(2)}</span>
+                      <span className="text-2xl font-black text-zinc-950">{formatPrice(configuratorTotal)}</span>
                     </div>
                     <span className="text-xs text-green-600 font-bold bg-green-50 px-2 py-1 rounded">Includes Promo Discount!</span>
                   </div>
@@ -1034,7 +1180,7 @@ export default function App() {
                           key={color}
                           type="button"
                           onClick={() => setCfgKeyboardColor(color)}
-                          className={`py-2 px-3 text-xs font-bold border rounded-lg transition-all ${
+                          className={`py-2 px-3 text-xs font-bold border rounded-lg transition-all cursor-pointer ${
                             cfgKeyboardColor === color 
                               ? 'bg-orange-500 text-white border-orange-500' 
                               : 'bg-zinc-50 hover:bg-zinc-100 text-zinc-700 border-zinc-200'
@@ -1050,12 +1196,12 @@ export default function App() {
                   <div className="flex items-center justify-between py-2 border-t border-zinc-100">
                     <div>
                       <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-800 block">Add Aluminum Stand</span>
-                      <span className="text-xs text-zinc-500">Ergonomic elevation & cooling base (+ $39.99)</span>
+                      <span className="text-xs text-zinc-500">Ergonomic elevation & cooling base (+ {formatPrice(standPrice)})</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setCfgStand(!cfgStand)}
-                      className={`w-12 h-6 rounded-full p-1 transition-all ${cfgStand ? 'bg-orange-500' : 'bg-zinc-300'}`}
+                      className={`w-12 h-6 rounded-full p-1 transition-all cursor-pointer ${cfgStand ? 'bg-orange-500' : 'bg-zinc-300'}`}
                     >
                       <div className={`w-4 h-4 rounded-full bg-white transition-all transform ${cfgStand ? 'translate-x-6' : 'translate-x-0'}`} />
                     </button>
@@ -1065,12 +1211,12 @@ export default function App() {
                   <div className="flex items-center justify-between py-2 border-t border-zinc-100">
                     <div>
                       <span className="text-xs font-extrabold uppercase tracking-wider text-zinc-800 block">Add Shockproof Case</span>
-                      <span className="text-xs text-zinc-500">MagSafe Armor protection (+ $18.99)</span>
+                      <span className="text-xs text-zinc-500">MagSafe Armor protection (+ {formatPrice(casePrice)})</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setCfgCase(!cfgCase)}
-                      className={`w-12 h-6 rounded-full p-1 transition-all ${cfgCase ? 'bg-orange-500' : 'bg-zinc-300'}`}
+                      className={`w-12 h-6 rounded-full p-1 transition-all cursor-pointer ${cfgCase ? 'bg-orange-500' : 'bg-zinc-300'}`}
                     >
                       <div className={`w-4 h-4 rounded-full bg-white transition-all transform ${cfgCase ? 'translate-x-6' : 'translate-x-0'}`} />
                     </button>
@@ -1188,7 +1334,7 @@ export default function App() {
                     <RotateCcw className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm text-zinc-950">30-Day Hassle-Free Returns</h4>
+                    <h4 className="font-bold text-sm text-zinc-950">7-Day Hassle-Free Returns</h4>
                     <p className="text-xs text-zinc-500 mt-0.5">Not perfect? We process free prepaid labels instantly.</p>
                   </div>
                 </div>
@@ -1219,12 +1365,12 @@ export default function App() {
 
               <div className="space-y-4 pt-4">
                 <div className="flex items-center space-x-3 text-sm">
-                  <div className="bg-zinc-100 p-2.5 rounded-lg text-zinc-700">
+                  <div className="bg-zinc-100 p-2.5 rounded-lg text-zinc-700 animate-pulse">
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="text-xs text-zinc-400 block font-medium">Email Support</span>
-                    <a href="mailto:support@mangobee.co" className="font-bold text-zinc-800 hover:text-orange-500 transition-colors">support@mangobee.co</a>
+                    <a href="mailto:support@mangobee.in" className="font-bold text-zinc-800 hover:text-orange-500 transition-colors">support@mangobee.in</a>
                   </div>
                 </div>
 
@@ -1233,8 +1379,8 @@ export default function App() {
                     <Phone className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs text-zinc-400 block font-medium">Corporate Headquarters</span>
-                    <span className="font-bold text-zinc-800">+1 (800) 555-MANGOBEE</span>
+                    <span className="text-xs text-zinc-400 block font-medium">WhatsApp Support</span>
+                    <a href="https://wa.me/918431764889" target="_blank" rel="noreferrer" className="font-bold text-zinc-800 hover:text-orange-500 transition-colors">+91 8431764889</a>
                   </div>
                 </div>
 
@@ -1243,8 +1389,10 @@ export default function App() {
                     <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs text-zinc-400 block font-medium">Design Lab Location</span>
-                    <span className="font-bold text-zinc-800">45 Mango Way, Suite 300, San Francisco, CA</span>
+                    <span className="text-xs text-zinc-400 block font-medium">Registered Office Address</span>
+                    <span className="font-bold text-zinc-800 text-xs sm:text-sm leading-relaxed block">
+                      3/169 (49/301) ayyampilikavu lane, Eroor P O, Tripunithura, Eranakulam, Kerala, India, Pin 682306
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1540,10 +1688,10 @@ export default function App() {
 
                               {/* Price / Delete */}
                               <div className="flex items-center space-x-3">
-                                <span className="text-sm font-black text-zinc-950">${(item.product.price * item.quantity).toFixed(2)}</span>
+                                <span className="text-sm font-black text-zinc-950">{formatPrice(item.product.price * item.quantity)}</span>
                                 <button 
                                   onClick={() => removeCartItem(item.product.id, item.variant)}
-                                  className="text-zinc-400 hover:text-red-500 transition-colors"
+                                  className="text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
                                   title="Delete item"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1562,7 +1710,11 @@ export default function App() {
                 <form onSubmit={handleCheckoutSubmit} className="space-y-4" id="checkout-form">
                   <div className="flex items-center space-x-2 bg-zinc-50 p-3 rounded-lg text-xs font-semibold text-zinc-600 mb-4 border border-zinc-200">
                     <Info className="w-4 h-4 text-orange-500 shrink-0" />
-                    <span>Complete your shipping pre-order reservation. No payment required today.</span>
+                    <span>
+                      {activeCurrency === 'INR' 
+                        ? 'Proceed to our India-based gateway for automated payment verification.' 
+                        : 'Secure your reservation slot. No payment required today.'}
+                    </span>
                   </div>
 
                   <div>
@@ -1605,7 +1757,7 @@ export default function App() {
                     <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1">Contact Phone</label>
                     <input
                       type="tel"
-                      placeholder="+1 (555) 000-0000"
+                      placeholder="+91 84317 64889"
                       value={shippingInfo.phone}
                       onChange={(e) => setShippingInfo({ ...shippingInfo, phone: e.target.value })}
                       className="w-full bg-zinc-50 text-sm px-3 py-2.5 rounded-lg border border-zinc-200 focus:border-orange-500 focus:bg-white outline-none transition-all"
@@ -1614,14 +1766,16 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full mt-6 bg-orange-500 hover:bg-orange-600 text-white font-extrabold py-3.5 rounded-xl transition-colors shadow-md"
+                    className="w-full mt-6 bg-orange-500 hover:bg-orange-600 text-white font-extrabold py-3.5 rounded-xl transition-colors shadow-md cursor-pointer"
                   >
-                    Confirm Pre-Order Reservation
+                    {activeCurrency === 'INR' 
+                      ? 'Proceed to Razorpay Secure Payment' 
+                      : 'Confirm Pre-Order Reservation'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setCheckoutStep('cart')}
-                    className="w-full text-center text-xs text-zinc-400 hover:text-zinc-600 mt-2 font-bold"
+                    className="w-full text-center text-xs text-zinc-400 hover:text-zinc-600 mt-2 font-bold cursor-pointer"
                   >
                     Back to cart review
                   </button>
@@ -1671,19 +1825,25 @@ export default function App() {
                 <div className="space-y-1.5 text-sm font-medium">
                   <div className="flex justify-between text-zinc-500">
                     <span>Subtotal</span>
-                    <span>${cartTotals.subtotal.toFixed(2)}</span>
+                    <span>{formatPrice(cartTotals.subtotal + cartTotals.bundleDiscount)}</span>
                   </div>
+                  {cartTotals.bundleDiscount > 0 && (
+                    <div className="flex justify-between text-green-600 font-semibold">
+                      <span>Bundle Promo Discount</span>
+                      <span>-{formatPrice(cartTotals.bundleDiscount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-zinc-500">
                     <span>Estimated Shipping</span>
-                    <span>{cartTotals.shipping === 0 ? 'FREE' : `$${cartTotals.shipping.toFixed(2)}`}</span>
+                    <span>{cartTotals.shipping === 0 ? 'FREE' : formatPrice(cartTotals.shipping)}</span>
                   </div>
                   <div className="flex justify-between text-zinc-500 border-b border-zinc-100 pb-2">
                     <span>Sales Tax (8%)</span>
-                    <span>${cartTotals.tax.toFixed(2)}</span>
+                    <span>{formatPrice(cartTotals.tax)}</span>
                   </div>
                   <div className="flex justify-between text-zinc-950 font-extrabold text-base pt-1">
                     <span>Total Cost</span>
-                    <span className="text-orange-500">${cartTotals.total.toFixed(2)}</span>
+                    <span className="text-orange-500">{formatPrice(cartTotals.total)}</span>
                   </div>
                 </div>
 
@@ -1775,6 +1935,280 @@ export default function App() {
           onClose={() => setAdminOpen(false)} 
           onContentChange={loadDatabaseStore} 
         />
+      )}
+
+      {/* Floating WhatsApp Support Button */}
+      <a 
+        href="https://wa.me/918431764889" 
+        target="_blank" 
+        rel="noreferrer"
+        className="fixed bottom-6 right-6 z-40 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl flex items-center justify-center space-x-2 transition-transform duration-300 hover:scale-110 group cursor-pointer"
+        title="Chat with support on WhatsApp"
+        id="whatsapp-chat-widget"
+      >
+        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
+          <path d="M12.031 2C6.51 2 2 6.51 2 12.03c0 1.763.461 3.42 1.267 4.871L2 22l5.244-1.375c1.4.764 2.99 1.188 4.787 1.188 5.52 0 10.03-4.51 10.03-10.03C22.062 6.51 17.551 2 12.03 2zm4.847 14.417c-.201.564-1.163 1.077-1.603 1.135-.399.053-.918.093-2.618-.61-2.174-.897-3.561-3.111-3.67-3.256-.109-.145-.883-1.173-.883-2.24 0-1.066.556-1.59.754-1.801.201-.21.439-.263.585-.263.147 0 .294.004.422.01.132.007.31.026.471.41.165.394.568 1.39.617 1.492.051.101.084.22.016.353-.067.135-.101.22-.202.339-.101.121-.21.27-.302.372-.101.112-.206.234-.088.437.118.203.525.867 1.129 1.405.779.693 1.432.908 1.636 1.011.204.103.323.087.442-.051.121-.137.514-.6.652-.803.137-.203.275-.17.464-.1.19.07 1.204.568 1.412.671.208.104.347.154.397.24.05.086.05 1.002-.151 1.566z" />
+        </svg>
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-out text-xs font-bold whitespace-nowrap">
+          WhatsApp Support
+        </span>
+      </a>
+
+      {/* Razorpay Simulated secure payment gateway */}
+      {razorpayOpen && razorpayOrderPayload && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-zinc-200 overflow-hidden text-zinc-800 animate-fadeIn">
+            {/* Header branding */}
+            <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-zinc-800">
+              <div className="flex items-center space-x-2">
+                <span className="bg-blue-600 text-white font-extrabold px-2.5 py-1 rounded text-xs tracking-tight">R</span>
+                <div>
+                  <h4 className="text-xs font-bold leading-none tracking-wide text-zinc-400">SECURE PAYMENT GATEWAY</h4>
+                  <span className="text-sm font-black text-white">Razorpay Secure</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setRazorpayOpen(false);
+                  alert('Payment cancelled. Your cart remains intact.');
+                }}
+                className="text-zinc-400 hover:text-white p-1.5 rounded-full hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Merchant / Bill Banner */}
+            <div className="bg-zinc-50 px-6 py-4 flex items-center justify-between border-b border-zinc-100">
+              <div>
+                <span className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase font-sans">MERCHANT</span>
+                <h3 className="text-sm font-black text-zinc-950 font-sans">Mango bee India</h3>
+                <span className="text-[10px] text-zinc-500 font-medium font-sans">Order ID: {preorderId}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase font-sans">AMOUNT DUE</span>
+                <div className="text-lg font-black text-blue-600 font-sans">
+                  {formatPrice(cartTotals.total)}
+                </div>
+              </div>
+            </div>
+
+            {/* Main content body */}
+            <div className="p-6 space-y-4">
+              {!otpStep ? (
+                <>
+                  {/* Select Payment Methods */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRazorpayMethod('upi')}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                        razorpayMethod === 'upi'
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-600 font-bold'
+                          : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 font-semibold'
+                      }`}
+                    >
+                      <span className="text-xs">UPI / GPay</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRazorpayMethod('card')}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                        razorpayMethod === 'card'
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-600 font-bold'
+                          : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 font-semibold'
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span className="text-[11px]">Card</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRazorpayMethod('netbanking')}
+                      className={`p-3 rounded-xl border flex flex-col items-center justify-center space-y-1 transition-all cursor-pointer ${
+                        razorpayMethod === 'netbanking'
+                          ? 'border-blue-600 bg-blue-50/50 text-blue-600 font-bold'
+                          : 'border-zinc-200 hover:border-zinc-300 text-zinc-500 font-semibold'
+                      }`}
+                    >
+                      <Monitor className="w-4 h-4" />
+                      <span className="text-[11px]">NetBanking</span>
+                    </button>
+                  </div>
+
+                  {/* Payment Info inputs */}
+                  <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100">
+                    {razorpayMethod === 'upi' && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-1">Enter your Virtual Payment Address (UPI ID)</label>
+                          <input
+                            type="text"
+                            value={razorpayUpiId}
+                            onChange={(e) => setRazorpayUpiId(e.target.value)}
+                            placeholder="username@okaxis"
+                            className="w-full bg-white border border-zinc-200 px-3.5 py-2.5 rounded-lg outline-none text-sm font-semibold focus:border-blue-500"
+                          />
+                        </div>
+                        <p className="text-[10px] text-zinc-500 leading-relaxed">
+                          Supported Apps: Google Pay, PhonePe, Paytm, BHIM UPI, HDFC PayZapp, etc.
+                        </p>
+                      </div>
+                    )}
+
+                    {razorpayMethod === 'card' && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-1">Card Number</label>
+                          <input
+                            type="text"
+                            value={razorpayCardNumber}
+                            onChange={(e) => setRazorpayCardNumber(e.target.value)}
+                            placeholder="4111 2222 3333 4444"
+                            className="w-full bg-white border border-zinc-200 px-3.5 py-2.5 rounded-lg outline-none text-sm font-semibold focus:border-blue-500"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-1">Expiry (MM/YY)</label>
+                            <input
+                              type="text"
+                              value={razorpayCardExpiry}
+                              onChange={(e) => setRazorpayCardExpiry(e.target.value)}
+                              placeholder="12/29"
+                              className="w-full bg-white border border-zinc-200 px-3.5 py-2.5 rounded-lg outline-none text-sm font-semibold focus:border-blue-500 text-center"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-1">CVV / CVC</label>
+                            <input
+                              type="password"
+                              value={razorpayCardCvv}
+                              onChange={(e) => setRazorpayCardCvv(e.target.value)}
+                              placeholder="•••"
+                              maxLength={3}
+                              className="w-full bg-white border border-zinc-200 px-3.5 py-2.5 rounded-lg outline-none text-sm font-semibold focus:border-blue-500 text-center"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {razorpayMethod === 'netbanking' && (
+                      <div className="space-y-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-wide text-zinc-400 mb-1">Choose your Bank</label>
+                        <select className="w-full bg-white border border-zinc-200 px-3.5 py-2.5 rounded-lg outline-none text-sm font-semibold focus:border-blue-500">
+                          <option>State Bank of India (SBI)</option>
+                          <option>HDFC Bank</option>
+                          <option>ICICI Bank</option>
+                          <option>Axis Bank</option>
+                          <option>Kotak Mahindra Bank</option>
+                        </select>
+                        <p className="text-[10px] text-zinc-500">
+                          You will be redirected to your bank&apos;s sandbox dashboard to authorize payment.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Razorpay Call to Action button */}
+                  <button
+                    type="button"
+                    disabled={razorpayLoading}
+                    onClick={() => {
+                      setRazorpayLoading(true);
+                      setTimeout(() => {
+                        setRazorpayLoading(false);
+                        setOtpStep(true);
+                      }, 1200);
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-600/15 flex items-center justify-center space-x-2 text-sm cursor-pointer"
+                  >
+                    {razorpayLoading ? (
+                      <span>Redirecting to bank gateways...</span>
+                    ) : (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        <span>Pay {formatPrice(cartTotals.total)} Securely</span>
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                /* OTP Input Simulation step */
+                <div className="space-y-4 text-center py-4">
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-2 animate-pulse">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-black text-zinc-950 font-sans">Bank OTP Verification</h3>
+                  <p className="text-xs text-zinc-500 max-w-xs mx-auto">
+                    Please enter the 6-digit verification code sent to {shippingInfo.phone || 'your phone'} to complete transaction.
+                  </p>
+                  
+                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-lg max-w-xs mx-auto text-[11px] text-amber-700 font-semibold">
+                    🔑 Mock Sandbox OTP: <span className="underline font-black">123456</span>
+                  </div>
+
+                  <div className="max-w-[180px] mx-auto">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={userOtpInput}
+                      onChange={(e) => setUserOtpInput(e.target.value)}
+                      placeholder="••••••"
+                      className="w-full bg-zinc-50 border-2 border-zinc-200 text-center tracking-[0.5em] text-lg font-bold py-2.5 rounded-xl outline-none focus:border-blue-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={razorpayLoading}
+                    onClick={async () => {
+                      if (userOtpInput !== '123456') {
+                        alert('Incorrect Verification Code. Please enter 123456.');
+                        return;
+                      }
+                      setRazorpayLoading(true);
+                      setTimeout(async () => {
+                        try {
+                          const completedPayload = {
+                            ...razorpayOrderPayload,
+                            status: 'confirmed' as const,
+                          };
+                          await saveOrder(completedPayload);
+                        } catch (err) {
+                          console.warn('Fallback saving order:', err);
+                        }
+                        
+                        setRazorpayLoading(false);
+                        setRazorpayOpen(false);
+                        setCheckoutStep('success');
+                        setCart([]);
+                      }, 1500);
+                    }}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-extrabold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center space-x-2 text-sm mt-4 cursor-pointer"
+                  >
+                    {razorpayLoading ? (
+                      <span>Verifying Secure OTP...</span>
+                    ) : (
+                      <span>Submit OTP & Confirm Order</span>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Secure Badging footers */}
+              <div className="flex items-center justify-center space-x-4 text-[10px] text-zinc-400 font-semibold pt-2">
+                <span className="flex items-center space-x-0.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                  <span>PCI-DSS Compliant</span>
+                </span>
+                <span>•</span>
+                <span>128-bit SSL Encrypted</span>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
